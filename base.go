@@ -76,6 +76,7 @@ type API struct {
 	Auth      string      // auth token, filled by Login()
 	Logger    *log.Logger // request/response logger, nil by default
 	UserAgent string
+	AuthToken string // token for API token authentication
 	url       string
 	c         http.Client
 	id        int32
@@ -262,6 +263,12 @@ func (api *API) Login(user, password string) (auth string, err error) {
 	auth = response.Result.(string)
 	api.Auth = auth
 	return
+}
+
+// Token Sets API token for authentication
+func (api *API) Token(token string) (auth string, err error) {
+	api.Auth = token
+	return token, nil
 }
 
 // Version Calls "APIInfo.version" API method.

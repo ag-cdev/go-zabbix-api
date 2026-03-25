@@ -1,5 +1,11 @@
 package zabbix
 
+import (
+	"encoding/json"
+	"regexp"
+	"strings"
+)
+
 type (
 	// SeverityType of a trigger
 	// Zabbix severity see : https://www.zabbix.com/documentation/3.2/manual/api/reference/trigger/object
@@ -92,6 +98,92 @@ type Trigger struct {
 	// Hosts that the trigger belongs to in the hosts property.
 	ParentHosts Hosts `json:"hosts,omitempty"`
 	Tags        Tags  `json:"tags,omitempty"`
+
+	// Zabbix 7.0+ fields
+	RuleID  string `json:"ruleid,omitempty"`
+	UUID    string `json:"uuid,omitempty"`
+	ProxyID string `json:"proxyid,omitempty"`
+}
+
+func convertExpressionToZabbix7(expr string) string {
+	if strings.HasPrefix(expr, "last(") || strings.HasPrefix(expr, "avg(") || strings.HasPrefix(expr, "min(") || strings.HasPrefix(expr, "max(") {
+		return expr
+	}
+
+	result := ""
+	i := 0
+	for i < len(expr) {
+		if expr[i] == '{' {
+			end := findMatchingBrace(expr[i:])
+			if end != -1 {
+				segment := expr[i : i+end+1]
+				converted := convertTriggerSegment(segment)
+				result += converted
+				i += end + 1
+				continue
+			}
+		}
+		result += string(expr[i])
+		i++
+	}
+	return result
+}
+
+func findMatchingBrace(s string) int {
+	depth := 0
+	for i, c := range s {
+		if c == '{' {
+			depth++
+		} else if c == '}' {
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+func convertTriggerSegment(segment string) string {
+	if len(segment) < 2 || segment[0] != '{' || segment[len(segment)-1] != '}' {
+		return segment
+	}
+	inner := segment[1 : len(segment)-1]
+	colonIdx := strings.Index(inner, ":")
+	if colonIdx == -1 {
+		return segment
+	}
+	template := inner[:colonIdx]
+	keyPart := inner[colonIdx+1:]
+	keyWithFunc := strings.TrimSpace(keyPart)
+	keyWithFunc = strings.TrimRight(keyWithFunc, ";")
+	keyWithFunc = strings.TrimRight(keyWithFunc, " ")
+	re := regexp.MustCompile(`^(.+?)(\.[a-zA-Z]+\(.*?\))+$`)
+	if re.MatchString(keyWithFunc) {
+		keyWithFunc = re.ReplaceAllString(keyWithFunc, "$1")
+	}
+	return "last(/" + template + "/" + keyWithFunc + ")"
+}
+
+func (t Trigger) MarshalJSON() ([]byte, error) {
+	type Alias Trigger
+	expr := t.Expression
+	if strings.Contains(expr, "{") && strings.Contains(expr, ":") && !strings.HasPrefix(expr, "last(") {
+		expr = convertExpressionToZabbix7(expr)
+	}
+	recoveryExpr := t.RecoveryExpression
+	if recoveryExpr != "" && strings.Contains(recoveryExpr, "{") && strings.Contains(recoveryExpr, ":") && !strings.HasPrefix(recoveryExpr, "last(") {
+		recoveryExpr = convertExpressionToZabbix7(recoveryExpr)
+	}
+	return json.Marshal(&struct {
+		Alias
+		Expression         string `json:"expression"`
+		RecoveryExpression string `json:"recovery_expression,omitempty"`
+	}{
+		Alias:              Alias(t),
+		Expression:         expr,
+		RecoveryExpression: recoveryExpr,
+	})
 }
 
 // Triggers is an array of Trigger

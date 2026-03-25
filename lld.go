@@ -44,7 +44,7 @@ type LLDMacroPaths []LLDMacroPath
 type LLDRule struct {
 	ItemID       string   `json:"itemid,omitempty"`
 	Delay        string   `json:"delay,omitempty"`
-	HostID       string   `json:"hostid"`
+	HostID       string   `json:"hostid,omitempty"`
 	InterfaceID  string   `json:"interfaceid,omitempty"`
 	Key          string   `json:"key_"`
 	Name         string   `json:"name"`
@@ -109,6 +109,96 @@ func (i LLDRule) MarshalJSON() ([]byte, error) {
 		for k, v := range i.Headers {
 			headers = append(headers, KeyValue{Name: k, Value: v})
 		}
+	}
+
+	// For Zabbix 7+, omit formulaid from filter conditions and hostid for LLD rules
+	if i.zbxVersion >= 70000 {
+		type AliasNoFormulaid LLDRule
+		aux := struct {
+			AliasNoFormulaid
+			Headers KeyValueArray `json:"headers,omitempty"`
+			Filter  struct {
+				Conditions []struct {
+					Macro    string          `json:"macro"`
+					Value    string          `json:"value"`
+					Operator LLDOperatorType `json:"operator,omitempty"`
+				} `json:"conditions"`
+				EvalType LLDEvalType `json:"evaltype"`
+				Formula  string      `json:"formula"`
+			} `json:"filter"`
+		}{
+			AliasNoFormulaid: AliasNoFormulaid{
+				HostID:               i.HostID,
+				ItemID:               i.ItemID,
+				Delay:                i.Delay,
+				InterfaceID:          i.InterfaceID,
+				Key:                  i.Key,
+				Name:                 i.Name,
+				Type:                 i.Type,
+				AuthType:             i.AuthType,
+				DelayFlex:            i.DelayFlex,
+				Description:          i.Description,
+				Error:                i.Error,
+				IpmiSensor:           i.IpmiSensor,
+				LifeTime:             i.LifeTime,
+				Params:               i.Params,
+				PrivateKey:           i.PrivateKey,
+				PublicKey:            i.PublicKey,
+				Status:               i.Status,
+				TrapperHosts:         i.TrapperHosts,
+				MasterItemID:         i.MasterItemID,
+				Username:             i.Username,
+				Password:             i.Password,
+				Port:                 i.Port,
+				Url:                  i.Url,
+				RequestMethod:        i.RequestMethod,
+				AllowTraps:           i.AllowTraps,
+				PostType:             i.PostType,
+				RetrieveMode:         i.RetrieveMode,
+				Posts:                i.Posts,
+				StatusCodes:          i.StatusCodes,
+				Timeout:              i.Timeout,
+				VerifyHost:           i.VerifyHost,
+				VerifyPeer:           i.VerifyPeer,
+				QueryFields:          i.QueryFields,
+				Proxy:                i.Proxy,
+				FollowRedirects:      i.FollowRedirects,
+				SNMPOid:              i.SNMPOid,
+				SNMPCommunity:        i.SNMPCommunity,
+				SNMPv3AuthPassphrase: i.SNMPv3AuthPassphrase,
+				SNMPv3AuthProtocol:   i.SNMPv3AuthProtocol,
+				SNMPv3ContextName:    i.SNMPv3ContextName,
+				SNMPv3PrivPasshrase:  i.SNMPv3PrivPasshrase,
+				SNMPv3PrivProtocol:   i.SNMPv3PrivProtocol,
+				SNMPv3SecurityLevel:  i.SNMPv3SecurityLevel,
+				SNMPv3SecurityName:   i.SNMPv3SecurityName,
+				Preprocessors:        i.Preprocessors,
+				MacroPaths:           i.MacroPaths,
+			},
+			Headers: headers,
+		}
+
+		// Copy filter conditions without formulaid
+		aux.Filter.EvalType = i.Filter.EvalType
+		aux.Filter.Formula = i.Filter.Formula
+		aux.Filter.Conditions = []struct {
+			Macro    string          `json:"macro"`
+			Value    string          `json:"value"`
+			Operator LLDOperatorType `json:"operator,omitempty"`
+		}{}
+		for _, c := range i.Filter.Conditions {
+			aux.Filter.Conditions = append(aux.Filter.Conditions, struct {
+				Macro    string          `json:"macro"`
+				Value    string          `json:"value"`
+				Operator LLDOperatorType `json:"operator,omitempty"`
+			}{
+				Macro:    c.Macro,
+				Value:    c.Value,
+				Operator: c.Operator,
+			})
+		}
+
+		return json.Marshal(aux)
 	}
 
 	type Alias LLDRule

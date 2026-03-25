@@ -60,8 +60,12 @@ type Host struct {
 	TemplateIDsClear TemplateIDs    `json:"templates_clear,omitempty"`
 	// templates are read back from this one
 	ParentTemplateIDs TemplateIDs `json:"parentTemplates,omitempty"`
-	ProxyID           string      `json:"proxy_hostid,omitempty"`
 	Tags              Tags        `json:"tags,omitempty"`
+
+	// Zabbix 7.0+ fields
+	MonitoredBy  string       `json:"monitored_by,omitempty"`
+	ProxyID      string       `json:"proxyid,omitempty"`
+	HostGroupIds HostGroupIDs `json:"host_groups,omitempty"`
 }
 
 // Hosts is an array of Host

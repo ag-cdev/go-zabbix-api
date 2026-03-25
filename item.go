@@ -199,7 +199,7 @@ func (i Item) MarshalJSON() ([]byte, error) {
 		type AliasNoDeprecated struct {
 			ItemID       string    `json:"itemid,omitempty"`
 			Delay        string    `json:"delay,omitempty"`
-			HostID       string    `json:"hostid"`
+			HostID       string    `json:"hostid,omitempty"`
 			InterfaceID  string    `json:"interfaceid,omitempty"`
 			Key          string    `json:"key_"`
 			Name         string    `json:"name"`
