@@ -59,6 +59,7 @@ const (
 	Dependent ItemType = 18
 	HTTPAgent ItemType = 19
 	SNMPAgent ItemType = 20
+	Browser   ItemType = 22
 )
 
 const (
@@ -105,20 +106,27 @@ const (
 
 type HttpHeaders map[string]string
 
+type KeyValue struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+type KeyValueArray []KeyValue
+
 // Item represent Zabbix item object
 // https://www.zabbix.com/documentation/3.2/manual/api/reference/item/object
 type Item struct {
 	ItemID       string    `json:"itemid,omitempty"`
-	Delay        string    `json:"delay"`
+	Delay        string    `json:"delay,omitempty"`
 	HostID       string    `json:"hostid"`
 	InterfaceID  string    `json:"interfaceid,omitempty"`
 	Key          string    `json:"key_"`
 	Name         string    `json:"name"`
 	Type         ItemType  `json:"type,string"`
 	ValueType    ValueType `json:"value_type,string"`
-	DataType     DataType  `json:"data_type,string"`
-	Delta        DeltaType `json:"delta,string"`
-	Description  string    `json:"description"`
+	DataType     DataType  `json:"data_type,string,omitempty"`
+	Delta        DeltaType `json:"delta,string,omitempty"`
+	Description  string    `json:"description,omitempty"`
 	Error        string    `json:"error,omitempty"`
 	History      string    `json:"history,omitempty"`
 	Trends       string    `json:"trends,omitempty"`
@@ -129,7 +137,7 @@ type Item struct {
 	RawApplications json.RawMessage `json:"applications,omitempty"`
 	Applications    []string        `json:"-"`
 
-	ItemParent Hosts `json:"hosts"`
+	ItemParent Hosts `json:"hosts,omitempty"`
 
 	Preprocessors Preprocessors `json:"preprocessing,omitempty"`
 
@@ -147,7 +155,9 @@ type Item struct {
 	Username        string          `json:"username,omitempty"`
 	Password        string          `json:"password,omitempty"`
 	Headers         HttpHeaders     `json:"-"`
+	HeadersArray    KeyValueArray   `json:"-"`
 	RawHeaders      json.RawMessage `json:"headers,omitempty"`
+	QueryFields     KeyValueArray   `json:"query_fields,omitempty"`
 	Proxy           string          `json:"http_proxy,omitempty"`
 	FollowRedirects string          `json:"follow_redirects,omitempty"`
 
@@ -167,9 +177,162 @@ type Item struct {
 
 	// Prototype
 	RuleID        string   `json:"ruleid,omitempty"`
-	DiscoveryRule *LLDRule `json:"discoveryRule,omitEmpty"`
+	DiscoveryRule *LLDRule `json:"discoveryRule,omitempty"`
 
 	Tags Tags `json:"tags,omitempty"`
+
+	// Internal field for version-aware serialization
+	// Set to >= 70000 for Zabbix 7+ compatibility (will omit data_type)
+	zbxVersion int `json:"-"`
+}
+
+func (i Item) MarshalJSON() ([]byte, error) {
+	headers := i.HeadersArray
+	if i.Headers != nil && len(i.Headers) > 0 {
+		for k, v := range i.Headers {
+			headers = append(headers, KeyValue{Name: k, Value: v})
+		}
+	}
+
+	// For Zabbix 7+, completely omit data_type and delta
+	if i.zbxVersion >= 70000 {
+		type AliasNoDeprecated struct {
+			ItemID       string    `json:"itemid,omitempty"`
+			Delay        string    `json:"delay,omitempty"`
+			HostID       string    `json:"hostid"`
+			InterfaceID  string    `json:"interfaceid,omitempty"`
+			Key          string    `json:"key_"`
+			Name         string    `json:"name"`
+			Type         ItemType  `json:"type,string"`
+			ValueType    ValueType `json:"value_type,string"`
+			Description  string    `json:"description,omitempty"`
+			Error        string    `json:"error,omitempty"`
+			History      string    `json:"history,omitempty"`
+			Trends       string    `json:"trends,omitempty"`
+			TrapperHosts string    `json:"trapper_hosts,omitempty"`
+			Params       string    `json:"params,omitempty"`
+
+			RawApplications json.RawMessage `json:"applications,omitempty"`
+			Applications    []string        `json:"-"`
+
+			ItemParent    Hosts         `json:"hosts,omitempty"`
+			Preprocessors Preprocessors `json:"preprocessing,omitempty"`
+
+			// HTTP Agent Fields
+			Url             string        `json:"url,omitempty"`
+			RequestMethod   string        `json:"request_method,omitempty"`
+			PostType        string        `json:"post_type,omitempty"`
+			RetrieveMode    string        `json:"retrieve_mode,omitempty"`
+			Posts           string        `json:"posts,omitempty"`
+			StatusCodes     string        `json:"status_codes,omitempty"`
+			Timeout         string        `json:"timeout,omitempty"`
+			VerifyHost      string        `json:"verify_host,omitempty"`
+			VerifyPeer      string        `json:"verify_peer,omitempty"`
+			AuthType        string        `json:"authtype,omitempty"`
+			Username        string        `json:"username,omitempty"`
+			Password        string        `json:"password,omitempty"`
+			Headers         KeyValueArray `json:"headers,omitempty"`
+			QueryFields     KeyValueArray `json:"query_fields,omitempty"`
+			Proxy           string        `json:"http_proxy,omitempty"`
+			FollowRedirects string        `json:"follow_redirects,omitempty"`
+
+			// SNMP Fields
+			SNMPOid              string `json:"snmp_oid,omitempty"`
+			SNMPCommunity        string `json:"snmp_community,omitempty"`
+			SNMPv3AuthPassphrase string `json:"snmpv3_authpassphrase,omitempty"`
+			SNMPv3AuthProtocol   string `json:"snmpv3_authprotocol,omitempty"`
+			SNMPv3ContextName    string `json:"snmpv3_contextname,omitempty"`
+			SNMPv3PrivPasshrase  string `json:"snmpv3_privpassphrase,omitempty"`
+			SNMPv3PrivProtocol   string `json:"snmpv3_privprotocol,omitempty"`
+			SNMPv3SecurityLevel  string `json:"snmpv3_securitylevel,omitempty"`
+			SNMPv3SecurityName   string `json:"snmpv3_securityname,omitempty"`
+
+			// Dependent Fields
+			MasterItemID string `json:"master_itemid,omitempty"`
+
+			// Prototype
+			RuleID        string   `json:"ruleid,omitempty"`
+			DiscoveryRule *LLDRule `json:"discoveryRule,omitempty"`
+
+			Tags Tags `json:"tags,omitempty"`
+		}
+
+		aux := struct {
+			AliasNoDeprecated
+			Headers KeyValueArray `json:"headers,omitempty"`
+		}{
+			AliasNoDeprecated: AliasNoDeprecated{
+				ItemID:       i.ItemID,
+				Delay:        i.Delay,
+				HostID:       i.HostID,
+				InterfaceID:  i.InterfaceID,
+				Key:          i.Key,
+				Name:         i.Name,
+				Type:         i.Type,
+				ValueType:    i.ValueType,
+				Description:  i.Description,
+				Error:        i.Error,
+				History:      i.History,
+				Trends:       i.Trends,
+				TrapperHosts: i.TrapperHosts,
+				Params:       i.Params,
+
+				RawApplications: i.RawApplications,
+				Applications:    i.Applications,
+
+				ItemParent:    i.ItemParent,
+				Preprocessors: i.Preprocessors,
+
+				Url:             i.Url,
+				RequestMethod:   i.RequestMethod,
+				PostType:        i.PostType,
+				RetrieveMode:    i.RetrieveMode,
+				Posts:           i.Posts,
+				StatusCodes:     i.StatusCodes,
+				Timeout:         i.Timeout,
+				VerifyHost:      i.VerifyHost,
+				VerifyPeer:      i.VerifyPeer,
+				AuthType:        i.AuthType,
+				Username:        i.Username,
+				Password:        i.Password,
+				QueryFields:     i.QueryFields,
+				Proxy:           i.Proxy,
+				FollowRedirects: i.FollowRedirects,
+
+				SNMPOid:              i.SNMPOid,
+				SNMPCommunity:        i.SNMPCommunity,
+				SNMPv3AuthPassphrase: i.SNMPv3AuthPassphrase,
+				SNMPv3AuthProtocol:   i.SNMPv3AuthProtocol,
+				SNMPv3ContextName:    i.SNMPv3ContextName,
+				SNMPv3PrivPasshrase:  i.SNMPv3PrivPasshrase,
+				SNMPv3PrivProtocol:   i.SNMPv3PrivProtocol,
+				SNMPv3SecurityLevel:  i.SNMPv3SecurityLevel,
+				SNMPv3SecurityName:   i.SNMPv3SecurityName,
+
+				MasterItemID: i.MasterItemID,
+
+				RuleID:        i.RuleID,
+				DiscoveryRule: i.DiscoveryRule,
+
+				Tags: i.Tags,
+			},
+			Headers: headers,
+		}
+
+		return json.Marshal(aux)
+	}
+
+	// For Zabbix 6.x and earlier
+	type Alias Item
+	aux := struct {
+		Alias
+		Headers KeyValueArray `json:"headers,omitempty"`
+	}{
+		Alias:   Alias(i),
+		Headers: headers,
+	}
+
+	return json.Marshal(aux)
 }
 
 type Preprocessors []Preprocessor
@@ -247,11 +410,21 @@ func (api *API) itemsHeadersUnmarshal(item Items) {
 			continue
 		}
 
+		// Try to unmarshal as map first (Zabbix < 7 format)
 		out := HttpHeaders{}
 		err := json.Unmarshal(h.RawHeaders, &out)
 		if err != nil {
-			api.printf("got error during unmarshal %s", err)
-			panic(err)
+			// Try array format (Zabbix 7+)
+			var arr KeyValueArray
+			if err2 := json.Unmarshal(h.RawHeaders, &arr); err2 == nil {
+				out = HttpHeaders{}
+				for _, kv := range arr {
+					out[kv.Name] = kv.Value
+				}
+			} else {
+				api.printf("got error during unmarshal %s", err)
+				panic(err)
+			}
 		}
 		item[i].Headers = out
 	}
@@ -316,6 +489,10 @@ func (api *API) ProtoItemsGetByApplicationID(id string) (res Items, err error) {
 // ItemsCreate Wrapper for item.create
 // https://www.zabbix.com/documentation/3.2/manual/api/reference/item/create
 func (api *API) ItemsCreate(items Items) (err error) {
+	version := api.Config.Version
+	for i := range items {
+		items[i].zbxVersion = version
+	}
 	prepItems(items)
 	response, err := api.CallWithError("item.create", items)
 	if err != nil {
@@ -330,6 +507,10 @@ func (api *API) ItemsCreate(items Items) (err error) {
 	return
 }
 func (api *API) ProtoItemsCreate(items Items) (err error) {
+	version := api.Config.Version
+	for i := range items {
+		items[i].zbxVersion = version
+	}
 	prepItems(items)
 	response, err := api.CallWithError("itemprototype.create", items)
 	if err != nil {
@@ -347,11 +528,19 @@ func (api *API) ProtoItemsCreate(items Items) (err error) {
 // ItemsUpdate Wrapper for item.update
 // https://www.zabbix.com/documentation/3.2/manual/api/reference/item/update
 func (api *API) ItemsUpdate(items Items) (err error) {
+	version := api.Config.Version
+	for i := range items {
+		items[i].zbxVersion = version
+	}
 	prepItems(items)
 	_, err = api.CallWithError("item.update", items)
 	return
 }
 func (api *API) ProtoItemsUpdate(items Items) (err error) {
+	version := api.Config.Version
+	for i := range items {
+		items[i].zbxVersion = version
+	}
 	prepItems(items)
 	_, err = api.CallWithError("itemprototype.update", items)
 	return

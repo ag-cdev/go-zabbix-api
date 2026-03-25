@@ -1,0 +1,48 @@
+version: '3.5'                           # Docker Compose file format version
+
+services:                                # Define the services (containers) to be created
+
+  mysql:                                 # MySQL/MariaDB service
+    image: mariadb:10.5                  # Use MariaDB version 10.5 image
+    container_name: zbx-mysql            # Name of the container
+    environment:                         # Set environment variables for MariaDB
+      MYSQL_ROOT_PASSWORD: root_pass     # Root password for the database
+      MYSQL_DATABASE: zabbix             # Create a database named 'zabbix'
+      MYSQL_USER: zabbix                 # Create a user named 'zabbix'
+      MYSQL_PASSWORD: zabbix_pass        # Password for user 'zabbix'
+    volumes:
+      - zabbix-db:/var/lib/mysql         # Persist database data using named volume
+    restart: unless-stopped              # Restart unless the container is manually stopped
+
+  zabbix-server:                         # Zabbix server service
+    image: zabbix/zabbix-server-mysql:alpine-7.0.24    # Use Zabbix 7.0.24
+    container_name: zbx-server           # Name of the container
+    environment:
+      DB_SERVER_HOST: mysql              # Hostname of the database (name of the MySQL service)
+      MYSQL_DATABASE: zabbix             # Database name to connect to
+      MYSQL_USER: zabbix                 # Database username
+      MYSQL_PASSWORD: zabbix_pass        # Database password
+    depends_on:
+      - mysql                            # Ensure this service starts after the MySQL service
+    ports:
+      - "10051:10051"                    # Expose Zabbix server port
+    restart: unless-stopped              # Auto-restart policy
+
+  zabbix-web:                            # Zabbix web frontend service
+    image: zabbix/zabbix-web-nginx-mysql:alpine-7.0.24 # Use Zabbix 7.0.24
+    container_name: zbx-web              # Name of the container
+    environment:
+      DB_SERVER_HOST: mysql              # Database host
+      MYSQL_DATABASE: zabbix             # Database name
+      MYSQL_USER: zabbix                 # Database user
+      MYSQL_PASSWORD: zabbix_pass        # Database password
+      ZBX_SERVER_HOST: zabbix-server     # Hostname of the Zabbix server
+      PHP_TZ: Asia/Kolkata           # Timezone for the PHP frontend
+    ports:
+      - "8080:8080"                      # Expose web interface on port 8080
+    depends_on:
+      - zabbix-server                    # Ensure Zabbix server is up before starting this service
+    restart: unless-stopped              # Auto-restart if stopped unexpectedly
+
+volumes:
+  zabbix-db:                             # Define a named volume to persist MySQL data

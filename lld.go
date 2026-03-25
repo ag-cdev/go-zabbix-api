@@ -42,28 +42,25 @@ type LLDMacroPaths []LLDMacroPath
 // Item represent Zabbix lld object
 // https://www.zabbix.com/documentation/3.2/manual/api/reference/item/object
 type LLDRule struct {
-	ItemID      string   `json:"itemid,omitempty"`
-	Delay       string   `json:"delay"`
-	HostID      string   `json:"hostid"`
-	InterfaceID string   `json:"interfaceid,omitempty"`
-	Key         string   `json:"key_"`
-	Name        string   `json:"name"`
-	Type        ItemType `json:"type,string"`
-	//	ValueType    ValueType `json:"value_type,string"`
-	//	DataType     DataType  `json:"data_type,string"`
-	//	Delta        DeltaType `json:"delta,string"`
-	AuthType     string `json:"authtype,omitempty"`
-	DelayFlex    string `json:"delay_flex,omitempty"`
-	Description  string `json:"description"`
-	Error        string `json:"error,omitempty"`
-	IpmiSensor   string `json:"ipmi_sensor,omitempty"`
-	LifeTime     string `json:"lifetime,omitempty"`
-	Params       string `json:"params,omitempty"`
-	PrivateKey   string `json:"privatekey,omitempty"`
-	PublicKey    string `json:"publickey,omitempty"`
-	Status       string `json:"status,omitempty"`
-	TrapperHosts string `json:"trapper_hosts,omitempty"`
-	MasterItemID string `json:"master_itemid,omitempty"`
+	ItemID       string   `json:"itemid,omitempty"`
+	Delay        string   `json:"delay,omitempty"`
+	HostID       string   `json:"hostid"`
+	InterfaceID  string   `json:"interfaceid,omitempty"`
+	Key          string   `json:"key_"`
+	Name         string   `json:"name"`
+	Type         ItemType `json:"type,string"`
+	AuthType     string   `json:"authtype,omitempty"`
+	DelayFlex    string   `json:"delay_flex,omitempty"`
+	Description  string   `json:"description,omitempty"`
+	Error        string   `json:"error,omitempty"`
+	IpmiSensor   string   `json:"ipmi_sensor,omitempty"`
+	LifeTime     string   `json:"lifetime,omitempty"`
+	Params       string   `json:"params,omitempty"`
+	PrivateKey   string   `json:"privatekey,omitempty"`
+	PublicKey    string   `json:"publickey,omitempty"`
+	Status       string   `json:"status,omitempty"`
+	TrapperHosts string   `json:"trapper_hosts,omitempty"`
+	MasterItemID string   `json:"master_itemid,omitempty"`
 
 	// ssh / telnet
 	Username string `json:"username,omitempty"`
@@ -82,9 +79,13 @@ type LLDRule struct {
 	VerifyHost      string          `json:"verify_host,omitempty"`
 	VerifyPeer      string          `json:"verify_peer,omitempty"`
 	Headers         HttpHeaders     `json:"-"`
+	HeadersArray    KeyValueArray   `json:"-"`
 	RawHeaders      json.RawMessage `json:"headers,omitempty"`
+	QueryFields     KeyValueArray   `json:"query_fields,omitempty"`
 	Proxy           string          `json:"http_proxy,omitempty"`
 	FollowRedirects string          `json:"follow_redirects,omitempty"`
+
+	zbxVersion int `json:"-"`
 
 	// SNMP Fields
 	SNMPOid              string `json:"snmp_oid,omitempty"`
@@ -100,6 +101,26 @@ type LLDRule struct {
 	Preprocessors Preprocessors `json:"preprocessing,omitempty"`
 	Filter        LLDRuleFilter `json:"filter"`
 	MacroPaths    LLDMacroPaths `json:"lld_macro_paths,omitempty"`
+}
+
+func (i LLDRule) MarshalJSON() ([]byte, error) {
+	headers := i.HeadersArray
+	if i.Headers != nil && len(i.Headers) > 0 {
+		for k, v := range i.Headers {
+			headers = append(headers, KeyValue{Name: k, Value: v})
+		}
+	}
+
+	type Alias LLDRule
+	aux := struct {
+		Alias
+		Headers KeyValueArray `json:"headers,omitempty"`
+	}{
+		Alias:   Alias(i),
+		Headers: headers,
+	}
+
+	return json.Marshal(aux)
 }
 
 // Items is an array of Item
@@ -120,11 +141,21 @@ func (api *API) lldsHeadersUnmarshal(item LLDRules) {
 			continue
 		}
 
+		// Try to unmarshal as map first (Zabbix < 7 format)
 		out := HttpHeaders{}
 		err := json.Unmarshal(h.RawHeaders, &out)
 		if err != nil {
-			api.printf("got error during unmarshal %s", err)
-			panic(err)
+			// Try array format (Zabbix 7+)
+			var arr KeyValueArray
+			if err2 := json.Unmarshal(h.RawHeaders, &arr); err2 == nil {
+				out = HttpHeaders{}
+				for _, kv := range arr {
+					out[kv.Name] = kv.Value
+				}
+			} else {
+				api.printf("got error during unmarshal %s", err)
+				panic(err)
+			}
 		}
 		item[i].Headers = out
 	}
@@ -172,6 +203,10 @@ func (api *API) LLDGetByID(id string) (res *LLDRule, err error) {
 // ItemsCreate Wrapper for item.create
 // https://www.zabbix.com/documentation/3.2/manual/api/reference/item/create
 func (api *API) LLDsCreate(items LLDRules) (err error) {
+	version := api.Config.Version
+	for i := range items {
+		items[i].zbxVersion = version
+	}
 	prepLLDs(items)
 	response, err := api.CallWithError("discoveryrule.create", items)
 	if err != nil {
@@ -189,6 +224,10 @@ func (api *API) LLDsCreate(items LLDRules) (err error) {
 // ItemsUpdate Wrapper for item.update
 // https://www.zabbix.com/documentation/3.2/manual/api/reference/item/update
 func (api *API) LLDsUpdate(items LLDRules) (err error) {
+	version := api.Config.Version
+	for i := range items {
+		items[i].zbxVersion = version
+	}
 	prepLLDs(items)
 	_, err = api.CallWithError("discoveryrule.update", items)
 	return

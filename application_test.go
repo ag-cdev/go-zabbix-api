@@ -12,6 +12,9 @@ import (
 func CreateApplication(host *zapi.Host, t *testing.T) *zapi.Application {
 	apps := zapi.Applications{{HostID: host.HostID, Name: fmt.Sprintf("App %d for %s", rand.Int(), host.Host)}}
 	err := getAPI(t).ApplicationsCreate(apps)
+	if _, ok := err.(*zapi.ErrApplicationAPIDeprecated); ok {
+		return nil
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -19,6 +22,9 @@ func CreateApplication(host *zapi.Host, t *testing.T) *zapi.Application {
 }
 
 func DeleteApplication(app *zapi.Application, t *testing.T) {
+	if app == nil {
+		return
+	}
 	err := getAPI(t).ApplicationsDelete(zapi.Applications{*app})
 	if err != nil {
 		t.Fatal(err)
@@ -34,6 +40,16 @@ func TestApplications(t *testing.T) {
 	host := CreateHost(group, t)
 	defer DeleteHost(host, t)
 
+	// Check if Application API is deprecated (Zabbix 5.4+)
+	apps, err := api.ApplicationsGet(zapi.Params{"hostids": host.HostID})
+	if err != nil {
+		if _, ok := err.(*zapi.ErrApplicationAPIDeprecated); ok {
+			t.Log("Application API is deprecated in Zabbix 5.4+, skipping test")
+			return
+		}
+		t.Fatal(err)
+	}
+
 	app := CreateApplication(host, t)
 	if app.ApplicationID == "" {
 		t.Errorf("Id is empty: %#v", app)
@@ -47,7 +63,7 @@ func TestApplications(t *testing.T) {
 		t.Errorf("Apps are equal:\n%#v\n%#v", app, app2)
 	}
 
-	apps, err := api.ApplicationsGet(zapi.Params{"hostids": host.HostID})
+	apps, err = api.ApplicationsGet(zapi.Params{"hostids": host.HostID})
 	if err != nil {
 		t.Fatal(err)
 	}

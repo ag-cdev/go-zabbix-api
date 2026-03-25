@@ -285,3 +285,13 @@ func (api *API) Version() (v string, err error) {
 	v = response.Result.(string)
 	return
 }
+
+// IsZabbix7OrGreater returns true if connected to Zabbix 7.0 or greater
+func (api *API) IsZabbix7OrGreater() bool {
+	return api.Config.Version >= 70000
+}
+
+// IsZabbix6OrGreater returns true if connected to Zabbix 6.0 or greater
+func (api *API) IsZabbix6OrGreater() bool {
+	return api.Config.Version >= 60000
+}

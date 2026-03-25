@@ -47,7 +47,11 @@ func getAPI(t *testing.T) *zapi.API {
 	var c zapi.Config
 	c.Url = url
 
-	_api = zapi.NewAPI(c)
+	var err error
+	_api, err = zapi.NewAPI(c)
+	if err != nil {
+		t.Fatal(err)
+	}
 	_api.SetClient(http.DefaultClient)
 	v := os.Getenv("TEST_ZABBIX_VERBOSE")
 	if v != "" && v != "0" {
@@ -73,8 +77,9 @@ func TestBadCalls(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Error.Code != -32602 {
-		t.Errorf("Expected code -32602, got %s", res.Error)
+	// Zabbix 7+ returns -32600 (Invalid request), older versions return -32602 (Invalid params)
+	if res.Error.Code != -32602 && res.Error.Code != -32600 {
+		t.Errorf("Expected code -32602 or -32600, got %s", res.Error)
 	}
 }
 

@@ -1,6 +1,9 @@
 package zabbix
 
+import "fmt"
+
 // Application represent Zabbix application object
+// Note: Application API was removed in Zabbix 5.4+ and replaced with Tags
 // https://www.zabbix.com/documentation/3.2/manual/api/reference/application/object
 type Application struct {
 	ApplicationID string `json:"applicationid,omitempty"`
@@ -12,9 +15,21 @@ type Application struct {
 // Applications is an array of Application
 type Applications []Application
 
+// ErrApplicationAPIDeprecated is returned when trying to use Application API on Zabbix 5.4+
+type ErrApplicationAPIDeprecated struct{}
+
+func (e *ErrApplicationAPIDeprecated) Error() string {
+	return "Application API is deprecated in Zabbix 5.4+ and replaced with Tags"
+}
+
 // ApplicationsGet Wrapper for application.get
 // https://www.zabbix.com/documentation/3.2/manual/api/reference/application/get
 func (api *API) ApplicationsGet(params Params) (res Applications, err error) {
+	if api.Config.Version >= 50400 {
+		err = &ErrApplicationAPIDeprecated{}
+		return
+	}
+
 	if _, present := params["output"]; !present {
 		params["output"] = "extend"
 	}
@@ -28,6 +43,11 @@ func (api *API) ApplicationsGet(params Params) (res Applications, err error) {
 
 // ApplicationGetByID Gets application by Id only if there is exactly 1 matching application.
 func (api *API) ApplicationGetByID(id string) (res *Application, err error) {
+	if api.Config.Version >= 50400 {
+		err = &ErrApplicationAPIDeprecated{}
+		return
+	}
+
 	apps, err := api.ApplicationsGet(Params{"applicationids": id})
 	if err != nil {
 		return
@@ -44,6 +64,11 @@ func (api *API) ApplicationGetByID(id string) (res *Application, err error) {
 
 // ApplicationGetByHostIDAndName Gets application by host Id and name only if there is exactly 1 matching application.
 func (api *API) ApplicationGetByHostIDAndName(hostID, name string) (res *Application, err error) {
+	if api.Config.Version >= 50400 {
+		err = &ErrApplicationAPIDeprecated{}
+		return
+	}
+
 	apps, err := api.ApplicationsGet(Params{"hostids": hostID, "filter": map[string]string{"name": name}})
 	if err != nil {
 		return
@@ -61,6 +86,11 @@ func (api *API) ApplicationGetByHostIDAndName(hostID, name string) (res *Applica
 // ApplicationsCreate Wrapper for application.create
 // https://www.zabbix.com/documentation/3.2/manual/api/reference/application/create
 func (api *API) ApplicationsCreate(apps Applications) (err error) {
+	if api.Config.Version >= 50400 {
+		err = &ErrApplicationAPIDeprecated{}
+		return
+	}
+
 	response, err := api.CallWithError("application.create", apps)
 	if err != nil {
 		return
@@ -78,6 +108,11 @@ func (api *API) ApplicationsCreate(apps Applications) (err error) {
 // Cleans ApplicationID in all apps elements if call succeed.
 // https://www.zabbix.com/documentation/2.2/manual/appendix/api/application/delete
 func (api *API) ApplicationsDelete(apps Applications) (err error) {
+	if api.Config.Version >= 50400 {
+		err = &ErrApplicationAPIDeprecated{}
+		return
+	}
+
 	ids := make([]string, len(apps))
 	for i, app := range apps {
 		ids[i] = app.ApplicationID
@@ -95,6 +130,15 @@ func (api *API) ApplicationsDelete(apps Applications) (err error) {
 // ApplicationsDeleteByIds Wrapper for application.delete
 // https://www.zabbix.com/documentation/2.2/manual/appendix/api/application/delete
 func (api *API) ApplicationsDeleteByIds(ids []string) (err error) {
+	if len(ids) == 0 {
+		return
+	}
+
+	if api.Config.Version >= 50400 {
+		err = &ErrApplicationAPIDeprecated{}
+		return
+	}
+
 	response, err := api.CallWithError("application.delete", ids)
 	if err != nil {
 		return
@@ -106,4 +150,14 @@ func (api *API) ApplicationsDeleteByIds(ids []string) (err error) {
 		err = &ExpectedMore{len(ids), len(applicationids)}
 	}
 	return
+}
+
+// ApplicationGetByHostID is a compatibility function for Zabbix 5.4+
+// It retrieves items filtered by host and simulates application-like behavior using tags
+func (api *API) ApplicationGetByHostID(hostID string) (res Applications, err error) {
+	if api.Config.Version >= 50400 {
+		err = fmt.Errorf("use ItemsGet with tags filter instead (Application API removed in 5.4+)")
+		return
+	}
+	return api.ApplicationsGet(Params{"hostids": hostID})
 }

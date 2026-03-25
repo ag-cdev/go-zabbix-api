@@ -145,7 +145,10 @@ func (api *API) HostsGetByHostGroups(hostGroups HostGroups) (res Hosts, err erro
 
 // HostGetByID Gets host by Id only if there is exactly 1 matching host.
 func (api *API) HostGetByID(id string) (res *Host, err error) {
-	hosts, err := api.HostsGet(Params{"hostids": id})
+	hosts, err := api.HostsGet(Params{
+		"hostids":          id,
+		"selectInterfaces": "extend",
+	})
 	if err != nil {
 		return
 	}

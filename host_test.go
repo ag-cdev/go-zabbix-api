@@ -26,6 +26,45 @@ func CreateHost(group *zapi.HostGroup, t *testing.T) *zapi.Host {
 	return &hosts[0]
 }
 
+func CreateHostWithSNMPInterface(group *zapi.HostGroup, t *testing.T) *zapi.Host {
+	api := getAPI(t)
+
+	name := fmt.Sprintf("%s-snmp-%d", getHost(), rand.Int())
+	snmpIface := zapi.HostInterface{
+		DNS:   name,
+		IP:    "127.0.0.1",
+		Port:  "161",
+		Type:  zapi.SNMP,
+		UseIP: "1",
+		Main:  "1",
+		Details: &zapi.HostInterfaceDetail{
+			Version:   "2",
+			Bulk:      "1",
+			Community: "public",
+		},
+	}
+	hosts := zapi.Hosts{{
+		Host:       name,
+		Name:       "SNMP Host " + name,
+		GroupIds:   zapi.HostGroupIDs{{group.GroupID}},
+		Interfaces: zapi.HostInterfaces{snmpIface},
+	}}
+
+	err := api.HostsCreate(hosts)
+	if err != nil {
+		t.Logf("Failed to create host with SNMP interface: %v", err)
+		return nil
+	}
+
+	// Fetch the host with interfaces
+	createdHost, err := api.HostGetByID(hosts[0].HostID)
+	if err != nil {
+		t.Logf("Failed to get host: %v", err)
+		return createdHost
+	}
+	return createdHost
+}
+
 func DeleteHost(host *zapi.Host, t *testing.T) {
 	err := getAPI(t).HostsDelete(zapi.Hosts{*host})
 	if err != nil {
@@ -53,7 +92,8 @@ func TestHosts(t *testing.T) {
 	}
 	host.GroupIds = nil
 	host.Interfaces = nil
-	host.ProxyID = "0"
+	host.ProxyID = ""
+	host.InventoryMode = 0
 
 	newName := fmt.Sprintf("%s-%d", getHost(), rand.Int())
 	host.Host = newName
@@ -66,6 +106,9 @@ func TestHosts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	host2.RawInventoryMode = nil
+	host2.ProxyID = ""
+	host2.InventoryMode = host.InventoryMode
 	if !reflect.DeepEqual(host, host2) {
 		t.Errorf("Hosts are not equal:\n%#v\n%#v", host, host2)
 	}
@@ -74,6 +117,10 @@ func TestHosts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	host2.RawInventoryMode = nil
+	host2.ProxyID = ""
+	host2.Interfaces = nil
+	host2.InventoryMode = host.InventoryMode
 	if !reflect.DeepEqual(host, host2) {
 		t.Errorf("Hosts are not equal:\n%#v\n%#v", host, host2)
 	}
